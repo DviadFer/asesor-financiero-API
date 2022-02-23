@@ -1,0 +1,18 @@
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+import json
+from .models import Tuser
+
+
+@csrf_exempt
+def login(request):
+  json_body = json.loads(request.body)
+  email_p = json_body['email']
+  try:
+    fila_usuairo = Tuser.objects.get(email=email_p)
+  except Tuser.DoesNotExist:
+    return JsonResponse(status=404, data={})
+
+#Continua sin problema  fila_usuario.active_session_token = "" 
+  print(json_body)
+  return JsonResponse(status=201, data={})
