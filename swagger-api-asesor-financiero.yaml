@@ -1,0 +1,390 @@
+openapi: "3.0.0"
+info:
+  version: 1.0.0
+  title: AsesorFinancieroAPI
+  description: API REST de una aplicación/web que permite a usuarios registrar sus ingresos y sus gastos por categoríascrear y buscar foros de conversación públicos, y subir mensajes para que los vean todos los usuarios
+servers:
+  - url: http://raspi:8001/rest
+paths:
+  /version/1/users:
+    post:
+      description: |
+        Registra un nuevo usuario
+      requestBody:
+        description: Datos del nuevo usuario. El usuario los cubre en un formulario mediante la aplicación cliente, que los envía en el cuerpo de esta petición
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NuevoUsuarioCuerpoPeticion'
+            example:
+              name: Pepe
+              surname: Depura
+              email: pepedepura@fpcoruna.afundacion.org
+              password: mypass1234
+      responses:
+        '201':
+          description: Creado con éxito
+        '400':
+          description: La petición ha fallado porque falta alguno de los parámetros o no es válido
+        '409':
+          description: La petición ha fallado porque ya existe un usuario registrado con ese email
+  /version/1/sessions:
+    post:
+      description: |
+        Permite a un usuario hacer login. Se recibe la contraseña y se devuelve un token de acceso.
+        
+        Las aplicaciones cliente deben almacenar el token de acceso para usarlo en futuras peticiones que requieren autenticación, donde se mandará como cabecera HTTP.
+      requestBody:
+        description: Correo electrónico y contraseña del usuario que quiere hacer login
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginUsuarioCuerpoPeticion'
+            example:
+              email: pepedepura@fpcoruna.afundacion.org
+              password: mypass1234
+      responses:
+        '201':
+          description: |
+            Usuario logueado con éxito.
+            
+            La aplicación cliente debe almacenar el user_id y el token recibido en la respuesta.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginUsuarioCuerpoRespuesta'
+              example:
+                user_id: 3
+                name: Pepe
+                token: 39kgZPajuUCP4YEbZFqL
+        '400':
+          description: La petición ha fallado porque falta alguno de los parámetros
+        '401':
+          description: La petición ha fallado porque la contraseña es incorrecta
+        '404':
+          description: La petición ha fallado porque el usuario no existe
+  /version/1/users/{id}/categories:
+    get:
+      description: |
+        Devuelve la lista de categorías económicas registradas previamente por el usuario.
+        
+        Esta petición se usa desde la pantalla principal, después de que el usuario se loguee. Sirve para que en la aplicación cliente se pueda mostrar las opciones de categoría disponibles al usuario a la hora de registrar una transacción (ingreso o gasto).
+      parameters:
+        - name: id
+          in: path
+          description: ID del usuario.
+          required: true
+          schema:
+            type: string
+          example: 3
+        - name: token
+          in: header
+          description: Token de autenticación del usuario. Debe ser un token válido devuelto por una petición de login
+          required: true
+          schema:
+            type: string
+          example: 39kgZPajuUCP4YEbZFqL
+      responses:
+        '200':
+          description: Lista de categorías. Será mostradas en la pantalla principal de la aplicación y el usuario elegirá una para registrar un ingreso/gasto
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ObjetoCategoria'
+              example:
+                - id: 14
+                  name: Bar
+                - id: 15
+                  name: Cine
+                - id: 16
+                  name: Amazon
+        '401':
+          description: La petición ha fallado porque no se ha enviado el token de autenticación en las cabeceras
+        '403':
+          description: La petición ha fallado porque el token de autenticación no es válido o no coincide con el ID de usuario pasado por parámetro en la ruta
+        '404':
+          description: La petición ha fallado porque el ID de usuario especificado no existe
+    post:
+      description: |
+        Permite a un usuario crear una nueva categoría, para su uso propio.
+      parameters:
+        - name: id
+          in: path
+          description: ID del usuario.
+          required: true
+          schema:
+            type: string
+          example: 3
+        - name: token
+          in: header
+          description: Token de autenticación del usuario. Debe ser un token válido devuelto por una petición de login
+          required: true
+          schema:
+            type: string
+          example: 39kgZPajuUCP4YEbZFqL
+      requestBody:
+        description: |
+          Datos de la categoría. Únicamente se especifica un nombre.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearCategoriaCuerpoPeticion'
+            example:
+              name: UberEats
+      responses:
+        '201':
+          description: Creada con éxito. La aplicación cliente debe registrar la pantalla principal pidiendo de nuevo las categorias con GET users/{id}/categories
+        '400':
+          description: La petición ha fallado porque 'name' no está o es inválido
+        '401':
+          description: La petición ha fallado porque no se ha enviado el token de autenticación en las cabeceras
+        '403':
+          description: La petición ha fallado porque el token de autenticación no es válido o no coincide con el ID de usuario pasado por parámetro en la ruta
+        '404':
+          description: La petición ha fallado porque el ID de usuario especificado no existe
+  /version/1/users/{id}/transactions:
+    get:
+      description: |
+        Devuelve la lista de transacciones (gastos o ingresos) registradas por el usuario, ordenadas por fecha, de más recientes a más antiguas. Requiere que el usuario esté autenticado.
+        
+        Esta petición admite un parámetro 'type' para filtrar por el tipo de transacción. Puede ser:
+        
+          - 'income': Se devolverán sólo las transacciones de tipo "Ingreso"
+          - 'spending': Se devolverán sólo las transacciones de tipo "Gasto"
+          - Si no se envía el parámetro; se devolverán todas las transacciones.
+      parameters:
+        - name: id
+          in: path
+          description: ID del usuario
+          required: true
+          schema:
+            type: integer
+          example: 3
+        - name: type
+          in: query
+          description: Especifica qué tipo de transacciones deben ser devueltas. Los valores posibles son 'income' y 'spending'.
+          required: false
+          schema:
+            type: string
+            enum: [income, spending]
+          example: income
+        - name: token
+          in: header
+          description: Token de autenticación del usuario. Debe ser un token válido devuelto por una petición de login
+          required: true
+          schema:
+            type: string
+          example: 39kgZPajuUCP4YEbZFqL
+      responses:
+        '200':
+          description: Lista de transacciones
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ObjetoTransaccion'
+              examples:
+                all:
+                  summary: Todas las transacciones
+                  value:
+                    - datetime: '2022-01-12T21:08:12Z'
+                      amount: 1732
+                      category_name: UberEats
+                      type: spending
+                    - datetime: '2022-01-01T12:00:15Z'
+                      amount: 500
+                      category_name: Amazon
+                      type: spending
+                    - datetime: '2021-12-25T20:28:12Z'
+                      amount: 4000
+                      category_name: Familia
+                      type: income
+                spendings:
+                  summary: Sólo gastos
+                  value:
+                    - datetime: '2022-01-12T21:08:12Z'
+                      amount: 1732
+                      category_name: UberEats
+                      type: spending
+                    - datetime: '2022-01-01T12:00:15Z'
+                      amount: 500
+                      category_name: Amazon
+                      type: spending
+                incomes:
+                  summary: Sólo ingresos
+                  value:
+                    - datetime: '2021-12-25T20:28:12Z'
+                      amount: 4000
+                      category_name: Familia
+                      type: income
+        '400':
+          description: La petición ha fallado porque no se ha especificado el parámetro 'limit'. También, si 'limit' o 'created_before' no son válidos
+        '401':
+          description: La petición ha fallado porque no se ha enviado el token de autenticación en las cabeceras
+        '403':
+          description: La petición ha fallado porque el token de sesión no es válido
+        '404':
+          description: La petición ha fallado porque no existe un foro con el ID especificado
+    post:
+      description: |
+        Desde una aplicación cliente, un usuario registra un nuevo gasto/ingreso en una categoría.
+        
+        Esto tiene lugar desde la pantalla principal.
+        
+        Todas las transacciones (gasto/ingreso) tienen siempre categoría.
+        
+        El servidor se encarga de almacenar la transacción con la fecha/hora correctas
+      parameters:
+        - name: id
+          in: path
+          description: ID del usuario
+          required: true
+          schema:
+            type: integer
+          example: 3
+        - name: token
+          in: header
+          description: Token de autenticación del usuario. Debe ser un token válido devuelto por una petición de login
+          required: true
+          schema:
+            type: string
+          example: 39kgZPajuUCP4YEbZFqL
+      requestBody:
+        description: La cantidad asociada a la transacción (siempre positiva, en CÉNTIMOS DE EURO), el ID de la categoría asociada y si fue un gasto o un ingreso
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrarTransaccionCuerpoPeticion'
+            example:
+              amount: 5000
+              category_id: 19
+              type: income
+      responses:
+        '201':
+          description: La transacción se ha registrado con éxito.
+        '401':
+          description: La petición ha fallado porque no se ha enviado el token de autenticación en las cabeceras
+        '403':
+          description: La petición ha fallado porque el token de autenticación no es válido o no coincide con el ID de usuario pasado por parámetro en la ruta
+        '404':
+          description: La petición ha fallado porque no existe un usuario con el ID especificado
+components:
+  schemas:
+    NuevoUsuarioCuerpoPeticion:
+      type: object
+      required:
+        - name
+        - surname
+        - email
+        - password
+      properties:
+        name:
+          type: string
+          description: Nombre real del usuario
+        surname:
+          type: string
+          description: Apellido(s) del usuario
+        email:
+          type: string
+          format: email
+          description: Correo electrónico del usuario
+        password:
+          type: string
+          format: password
+          description: Contraseña creada por el usuario
+    LoginUsuarioCuerpoPeticion:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: Correo electrónico del usuario
+        password:
+          type: string
+          format: password
+          description: Contraseña creada por el usuario  
+    LoginUsuarioCuerpoRespuesta:
+      type: object
+      required:
+        - user_id
+        - name
+        - token
+      properties:
+        user_id:
+          type: integer
+          description: ID del usuario que se ha logueado. Las aplicaciones clientes deberán preservar este valor para realizar futuras peticiones
+        name:
+          type: string
+          description: Nombre del usuario que se ha logueado. Puede ser usado por las aplicaciones cliente para dar un mensaje de bienvenida.
+        token:
+          type: string
+          description: Churro aleatorio de bytes que identifican la sesión de un usuario y le permiten realizar peticiones que requieren autenticación
+    ObjetoCategoria:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: integer
+          description: ID de la categoría. A la aplicación cliente le servirá para mandarlo de vuelta al servidor cuando se registre el gasto, a fin de que el servidor identifique la categoría elegida por el usuario
+        name:
+          type: string
+          description: Nombre de la categoría. Única información útil de la misma. Se espera que el usuario sintetice con brevedad
+    CrearCategoriaCuerpoPeticion:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Nombre de la categoría
+    ObjetoTransaccion:
+      type: object
+      required:
+        - datetime
+        - amount
+        - category_name
+        - type
+      properties: 
+        datetime:
+          type: string
+          format: date-time
+          description: Fecha y hora a la que se registró la transacción. Se formatea de acuerdo al RFC 3339, sección 5.6. Por ejemplo, 2017-07-21T17:32:28Z
+        amount:
+          type: int
+          description: Cantidad EN CÉNTIMOS DE EURO registrada. Siempre positiva. Para diferenciarla entre gasto ó ingreso, se interpreta el atributo 'type'
+        category_name:
+          type: string
+          description: Nombre de la categoría económica asociada
+        type:
+          type: string
+          enum: [income, spending]
+          description: Gasto ó ingreso
+    RegistrarTransaccionCuerpoPeticion:
+      type: object
+      required:
+        - amount
+        - category_id
+        - type
+      properties:
+        amount:
+          type: int
+          description: Cantidad EN CÉNTIMOS DE EURO elegida por el usuario. Tanto servidor como cliente deben validar que siempre sea positiva. Para diferenciarla entre gasto ó ingreso, se interpreta el atributo 'type'
+        category_id:
+          type: int
+          description: ID de la categoría económica asociada
+        type:
+          type: string
+          enum: [income, spending]
+          description: Gasto ó ingreso
