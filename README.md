@@ -25,7 +25,7 @@ Fui encargado de implementar el registro de nuevas operaciones, a través de un 
 
 ### new_transaction.php
 
-```php+HTML
+```php
 <form method="post" action="./do_new_transaction.php">
 	<label for="cantidad">Cantidad (€):</label>
 	<input type="number" min="1" id="cantidad" name="cantidad">
